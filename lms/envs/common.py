@@ -2562,6 +2562,9 @@ INSTALLED_APPS = [
     # Management of per-user schedules
     'openedx.core.djangoapps.schedules',
     'rest_framework_jwt',
+
+    # Learning Sequence Navigation
+    'openedx.core.djangoapps.content.learning_sequences.apps.LearningSequencesConfig',
 ]
 
 ######################### CSRF #########################################
@@ -2583,7 +2586,7 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
     ),
     'PAGE_SIZE': 10,
-    'URL_FORMAT_OVERRIDE': None,
+#    'URL_FORMAT_OVERRIDE': None,
     'DEFAULT_THROTTLE_RATES': {
         'user': '60/minute',
         'service_user': '120/minute',
