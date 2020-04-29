@@ -160,24 +160,13 @@ class AuthAndScopesTestMixin(object):
         resp = self.get_response(auth_type)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    @patch('edx_rest_framework_extensions.permissions.log')
     @ddt.data(*list(AuthType))
-    def test_another_user(self, auth_type, mock_log):
+    def test_another_user(self, auth_type):
         """
-        Returns 403 for OAuth, Session, and JWT auth with IsUserInUrl.
-        Returns 200 for jwt_restricted and user:me filter unset.
+        Returns 403 for OAuth, Session, JWT auth and JWT auth restricted
         """
         resp = self.get_response(auth_type, requesting_user=self.other_student)
-
-        # Restricted JWT tokens without the user:me filter have access to other users
-        expected_jwt_access_granted = auth_type == AuthType.jwt_restricted
-
-        self.assertEqual(
-            resp.status_code,
-            status.HTTP_200_OK if expected_jwt_access_granted else status.HTTP_403_FORBIDDEN,
-        )
-        if not expected_jwt_access_granted:
-            self._assert_in_log("IsUserInUrl", mock_log.info)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     @patch('edx_rest_framework_extensions.permissions.log')
     @ddt.data(*JWT_AUTH_TYPES)
