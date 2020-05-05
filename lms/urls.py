@@ -25,6 +25,7 @@ from lms.djangoapps.courseware.module_render import (
 from lms.djangoapps.courseware.views import views as courseware_views
 from lms.djangoapps.courseware.views.index import CoursewareIndex
 from lms.djangoapps.courseware.views.views import CourseTabView, EnrollStaffView, StaticCourseTabView
+from lms.djangoapps.course_home_api.urls import urlpatterns as course_home_api_urls
 from lms.djangoapps.discussion import views as discussion_views
 from lms.djangoapps.discussion.notification_prefs import views as notification_prefs_views
 from lms.djangoapps.instructor.views import coupons as instructor_coupons_views
@@ -999,3 +1000,4 @@ if 'openedx.testing.coverage_context_listener' in settings.INSTALLED_APPS:
     ]
 
 urlpatterns.extend(plugin_urls.get_patterns(plugin_constants.ProjectType.LMS))
+urlpatterns.extend(course_home_api_urls)
