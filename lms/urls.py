@@ -1000,4 +1000,8 @@ if 'openedx.testing.coverage_context_listener' in settings.INSTALLED_APPS:
     ]
 
 urlpatterns.extend(plugin_urls.get_patterns(plugin_constants.ProjectType.LMS))
-urlpatterns.extend(course_home_api_urls)
+
+# Course Home API urls
+urlpatterns += [
+    url(r'^course/{}/api'.format(settings.COURSE_KEY_PATTERN), include('lms.djangoapps.course_home_api.urls')),
+]
