@@ -344,6 +344,7 @@ class CourseAssignmentDate(DateSummary):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.assignment_date = None
+        self.assignment_link = ''
         self.assignment_title = None
         self.assignment_title_html = None
         self.contains_gated_content = False
@@ -357,6 +358,14 @@ class CourseAssignmentDate(DateSummary):
     @date.setter
     def date(self, date):
         self.assignment_date = date
+
+    @property
+    def link(self):
+        return self.assignment_link
+
+    @link.setter
+    def link(self, link):
+        self.assignment_link = link
 
     @property
     def title(self):

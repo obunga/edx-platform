@@ -11,7 +11,7 @@ from opaque_keys.edx.keys import CourseKey
 
 from lms.djangoapps.courseware.context_processor import user_timezone_locale_prefs
 from lms.djangoapps.courseware.courses import get_course_date_blocks, get_course_with_access
-from lms.djangoapps.courseware.date_summary import verified_upgrade_deadline_link
+from lms.djangoapps.courseware.date_summary import VerifiedUpgradeDeadlineDate, verified_upgrade_deadline_link
 from openedx.core.djangoapps.enrollments.api import get_enrollment
 
 from .serializers import DatesTabSerializer
@@ -51,7 +51,6 @@ class DatesTabView(RetrieveAPIView):
 
     serializer_class = DatesTabSerializer
 
-
     def get(self, request, course_key_string):
         course_key = CourseKey.from_string(course_key_string)
         course = get_course_with_access(request.user, 'load', course_key, check_if_enrolled=False)
@@ -73,14 +72,13 @@ class DatesTabView(RetrieveAPIView):
         user_language = user_timezone_locale['user_language']
 
         data = {
-            'course_number': course.display_number_with_default,
             'course_date_blocks': blocks,
-            'verified_upgrade_link': verified_upgrade_deadline_link(request.user, course=course),
+            'course_number': course.display_number_with_default,
             'learner_is_verified': learner_is_verified,
-            'user_timezone': user_timezone,
             'user_language': user_language,
+            'user_timezone': user_timezone,
+            'verified_upgrade_link': verified_upgrade_deadline_link(request.user, course=course),
         }
         serializer = self.get_serializer(data)
-
 
         return Response(serializer.data)

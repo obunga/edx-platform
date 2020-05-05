@@ -503,6 +503,7 @@ def get_course_assignment_date_blocks(course, user, request, num_return=None,
         date_block.contains_gated_content = assignment.contains_gated_content
         date_block.complete = assignment.complete
         date_block.past_due = assignment.past_due
+        date_block.link = assignment.url
         date_block.set_title(assignment.title, link=assignment.url)
         date_blocks.append(date_block)
     date_blocks = sorted((b for b in date_blocks if b.is_enabled or include_past_dates), key=date_block_key_fn)

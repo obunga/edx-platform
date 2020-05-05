@@ -10,14 +10,16 @@ class DateSummarySerializer(serializers.Serializer):
     """
     Serializer for Date Summary Objects.
     """
-    title = serializers.CharField()
     date = serializers.DateTimeField()
+    contains_gated_content = serializers.BooleanField(default=False)
+    title = serializers.CharField()
+    link = serializers.CharField()
 
 
 class DatesTabSerializer(serializers.Serializer):
-    course_number = serializers.CharField()
     course_date_blocks = DateSummarySerializer(many=True)
-    verified_upgrade_link = serializers.URLField()
+    course_number = serializers.CharField()
     learner_is_verified = serializers.BooleanField()
-    user_timezone = serializers.CharField()
     user_language = serializers.CharField()
+    user_timezone = serializers.CharField()
+    verified_upgrade_link = serializers.URLField()
