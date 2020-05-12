@@ -2,10 +2,11 @@
 
 
 """
+from datetime import datetime, timezone
 import json
 
-import attr
 from opaque_keys.edx.keys import CourseKey
+import attr
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -74,6 +75,7 @@ class CourseOutlineView(APIView):
 
     def get(self, request, course_key_str, format=None):
         course_key = CourseKey.from_string(course_key_str)
-        course_outline_data = get_course_outline_for_user(course_key, request.user)
+        at_time = datetime.now(timezone.utc)
+        course_outline_data = get_course_outline_for_user(course_key, request.user, at_time)
         serializer = self.UserCourseOutlineDataSerializer(course_outline_data)
         return Response(serializer.data)

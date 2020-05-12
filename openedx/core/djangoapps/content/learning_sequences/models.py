@@ -134,8 +134,8 @@ class CourseSectionSequence(CourseContentVisibilityMixin, TimeStampedModel):
     learning_context = models.ForeignKey(
         LearningContext, on_delete=models.CASCADE, related_name='section_sequences'
     )
-    section = models.ForeignKey(CourseSection)
-    sequence = models.ForeignKey(LearningSequence)
+    section = models.ForeignKey(CourseSection, on_delete=models.CASCADE)
+    sequence = models.ForeignKey(LearningSequence, on_delete=models.CASCADE)
     order = models.PositiveIntegerField(null=False)
 
     class Meta:

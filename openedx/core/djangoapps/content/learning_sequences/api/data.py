@@ -41,8 +41,16 @@ class CourseSectionData:
     sequences = attr.ib(type=List[LearningSequenceData])
 
 
+class ObjectDoesNotExist(Exception):
+    pass
+
+
 @attr.s(frozen=True)
 class CourseOutlineData:
+
+    class DoesNotExist(ObjectDoesNotExist):
+        pass
+
     course_key = attr.ib(type=CourseKey)
 
     @course_key.validator

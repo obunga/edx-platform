@@ -1,8 +1,11 @@
 import logging
 from collections import defaultdict
+from datetime import datetime
+from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from edx_django_utils.cache import TieredCache, get_cache_key
 from opaque_keys.edx.keys import CourseKey, UsageKey
 
 from .data import (
@@ -26,14 +29,22 @@ __all__ = [
 
 
 def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
-    # Need better error handling
-    if course_key.deprecated:
-        raise ValueError(
-            "Learning Sequence API does not support Old Mongo courses: %s",
-            course_key
-        )
+    """
+    Get the outline of a course run.
 
-    learning_context = LearningContext.objects.get(context_key=course_key)
+    There is no user-specific data or permissions applied in this function.
+    """
+    learning_context = _get_learning_context_for_outline(course_key)
+
+    # Check to see if it's in the cache.
+    cache_key = "learning_sequences.api.get_course_outline.v1.{}.{}".format(
+        learning_context.context_key, learning_context.published_version
+    )
+    outline_cache_result = TieredCache.get_cached_response(cache_key)
+    if outline_cache_result.is_found:
+        return outline_cache_result.value
+
+    # Fetch model
     section_models = CourseSection.objects \
                          .filter(learning_context=learning_context) \
                          .order_by('order')
@@ -42,8 +53,8 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
                                   .order_by('order') \
                                   .select_related('sequence')
 
-    # Build mapping of section.id keys to sequence lists. We do it this way and
-    # pull the sections separately to accurately represent empty sections.
+    # Build mapping of section.id keys to sequence lists. We pull the sections
+    # separately to accurately represent empty sections/chapters.
     sec_ids_to_sequence_list = defaultdict(list)
     seq_keys_to_sequence = {}
     hide_from_toc_set = set()
@@ -76,7 +87,7 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
         if section_model.visible_to_staff_only:
             visible_to_staff_only_set.add(section_model.usage_key)
 
-    return CourseOutlineData(
+    outline_data = CourseOutlineData(
         course_key=learning_context.context_key,
         title=learning_context.title,
         published_at=learning_context.published_at,
@@ -88,18 +99,70 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
             visible_to_staff_only=frozenset(visible_to_staff_only_set),
         )
     )
+    TieredCache.set_all_tiers(cache_key, outline_data, 300)
+
+    return outline_data
 
 
-def get_course_outline_for_user(course_key: CourseKey, user: User) -> UserCourseOutlineData:
+def _get_learning_context_for_outline(course_key: CourseKey) -> LearningContext:
+    if course_key.deprecated:
+        raise ValueError(
+            "Learning Sequence API does not support Old Mongo courses: {}"
+            .format(course_key),
+        )
+    try:
+        learning_context = LearningContext.objects.get(context_key=course_key)
+    except LearningContext.DoesNotExist:
+        # Could happen if it hasn't been published.
+        raise CourseOutlineData.DoesNotExist(
+            "No CourseOutlineData for {}".format(course_key)
+        )
+    return learning_context
+
+
+def get_accessible_course_outline(course_key: CourseKey,
+                                  user: User,
+                                  at_time: datetime) -> CourseOutlineData:
     """
+    Get an outline that has been limited to what a user is allowed to see.
+
+    `user` may be a Django User object or None (i.e. unauthenticated)
+    `at_time` should be a UTC datetime.datetime object.
+
+    Note that "accessible" is not exactly the same as "visible" as it's possible
+    for some sequences to be hidden from navigation (e.g. supplementary
+    tutorials, content only intended to be served as an LTI provider, etc.).
+    This function will return these items, and it's up to the caller to decide
+    how they should be presented.
+
+    TODO: Should we return a tuple here of (CourseOutlineData, Processors) so
+    that we don't recompute things that are needed to create supplemental
+    information?
+    """
+    pass
+
+
+def get_course_outline_for_user(course_key: CourseKey,
+                                user: User,
+                                at_time: datetime) -> UserCourseOutlineData:
+    """
+    Get an outline customized for a particular user at a particular time.
+
+    `user` is a Django User object (including the AnonymousUser)
+    `at_time` should be a UTC datetime.datetime object.
+
     We shouldn't force people to have all this supplementary information if they
     don't want it. Separate a) the processors; b) cutting away inaccessible
     content vs. adding supplementary information.
     """
-    s = ScheduleOutlineProcessor()
-    s.load_data_for_course(course_key, user)
-
     full_course_outline = get_course_outline(course_key)
+
+    # Add something to the data structure to add User + current time <- new data
+    # type?
+
+    s = ScheduleOutlineProcessor(course_key, user, at_time)
+    s.load_data()
+
     user_course_outline = UserCourseOutlineData(
         outline=full_course_outline,  # hasn't been transformed yet, should.
         user=user,
