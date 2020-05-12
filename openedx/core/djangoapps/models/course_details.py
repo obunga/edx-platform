@@ -8,6 +8,7 @@ import re
 
 from django.conf import settings
 
+from openedx.core.djangoapps.signals.signals import COURSE_CERT_DATE_CHANGE
 from openedx.core.djangolib.markup import HTML
 from openedx.core.lib.courses import course_image_url
 from xmodule.fields import Date
@@ -243,6 +244,7 @@ class CourseDetails(object):
         if converted != descriptor.certificate_available_date:
             dirty = True
             descriptor.certificate_available_date = converted
+            COURSE_CERT_DATE_CHANGE.send_robust(sender=cls, course_key=course_key)
 
         if 'course_image_name' in jsondict and jsondict['course_image_name'] != descriptor.course_image:
             descriptor.course_image = jsondict['course_image_name']
