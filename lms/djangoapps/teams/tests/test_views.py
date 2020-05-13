@@ -325,7 +325,8 @@ class TeamAPITestCase(APITestCase, SharedModuleStoreTestCase):
         cls.topics_count = 6
         cls.users = {
             'staff': AdminFactory.create(password=cls.test_password),
-            'course_staff': StaffFactory.create(course_key=cls.test_course_1.id, password=cls.test_password)
+            'course_staff': StaffFactory.create(course_key=cls.test_course_1.id, password=cls.test_password),
+            'admin': AdminFactory.create(password=cls.test_password)
         }
         cls.create_and_enroll_student(username='student_enrolled')
         cls.create_and_enroll_student(username='student_on_team_1_private_set_1', mode=CourseMode.MASTERS)
@@ -1299,7 +1300,8 @@ class TestDeleteTeamAPI(EventTestMixin, TeamAPITestCase):
         ('student_enrolled', 403),
         ('staff', 204),
         ('course_staff', 204),
-        ('community_ta', 204)
+        ('community_ta', 204),
+        ('admin', 204)
     )
     @ddt.unpack
     def test_access(self, user, status):
