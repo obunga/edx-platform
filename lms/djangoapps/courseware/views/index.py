@@ -28,6 +28,7 @@ from opaque_keys.edx.keys import CourseKey, UsageKey
 from web_fragments.fragment import Fragment
 
 from edxmako.shortcuts import render_to_response, render_to_string
+from lms.djangoapps.courseware.date_summary import verified_upgrade_deadline_link
 from lms.djangoapps.courseware.exceptions import CourseAccessRedirect, Redirect
 from lms.djangoapps.experiments.utils import get_experiment_user_metadata_context
 from lms.djangoapps.gating.api import get_entrance_exam_score_ratio, get_entrance_exam_usage_key
@@ -464,11 +465,10 @@ class CoursewareIndex(View):
         staff_access = self.is_staff
 
         allow_anonymous = check_public_access(self.course, [COURSE_VISIBILITY_PUBLIC])
-        display_reset_dates_banner = False
         if not allow_anonymous and RELATIVE_DATES_FLAG.is_enabled(self.course.id):
-            display_reset_dates_banner = reset_deadlines_banner_should_display(self.course_key, request)
+            missed_deadlines, _ = reset_deadlines_banner_should_display(self.course_key, request)
 
-        reset_deadlines_url = reverse(RESET_COURSE_DEADLINES_NAME) if display_reset_dates_banner else None
+        reset_deadlines_url = reverse(RESET_COURSE_DEADLINES_NAME) if (missed_deadlines and enrollment_mode) else None
 
         reset_deadlines_redirect_url_base = COURSE_HOME_VIEW_NAME if reset_deadlines_url else None
 
@@ -494,10 +494,14 @@ class CoursewareIndex(View):
             'disable_accordion': COURSE_OUTLINE_PAGE_FLAG.is_enabled(self.course.id),
             'show_search': show_search,
             'relative_dates_is_enabled': RELATIVE_DATES_FLAG.is_enabled(self.course.id),
-            'display_reset_dates_banner': display_reset_dates_banner,
+            'missed_deadlines': missed_deadlines,
             'reset_deadlines_url': reset_deadlines_url,
             'reset_deadlines_redirect_url_base': reset_deadlines_redirect_url_base,
-            'reset_deadlines_redirect_url_id_dict': {'course_id': str(self.course.id)},
+            'reset_deadlines_redirect_url_id_dict': {
+                'course_id': str(self.course.id) if reset_deadlines_redirect_url_base else None
+            },
+            'verified_upgrade_link': verified_upgrade_deadline_link(request.user, course=self.course),
+            'on_courseware_index_page': True,
         }
         courseware_context.update(
             get_experiment_user_metadata_context(

@@ -740,19 +740,6 @@ class CourseTabView(EdxFragmentView):
         else:
             masquerade = None
 
-        display_reset_dates_banner = False
-        if RELATIVE_DATES_FLAG.is_enabled(course.id):
-            course_overview = CourseOverview.get_from_id(course.id)
-            end_date = getattr(course_overview, 'end_date', None)
-            if (not end_date or timezone.now() < end_date and CourseEnrollment.objects.filter(
-                course=course_overview, user=request.user, mode=CourseMode.VERIFIED
-            ).exists()):
-                display_reset_dates_banner = True
-
-        reset_deadlines_url = reverse(RESET_COURSE_DEADLINES_NAME) if display_reset_dates_banner else None
-
-        reset_deadlines_redirect_url_base = COURSE_HOME_VIEW_NAME if reset_deadlines_url else None
-
         context = {
             'course': course,
             'tab': tab,
@@ -763,10 +750,6 @@ class CourseTabView(EdxFragmentView):
             'uses_bootstrap': uses_bootstrap,
             'uses_pattern_library': not uses_bootstrap,
             'disable_courseware_js': True,
-            'display_reset_dates_banner': display_reset_dates_banner,
-            'reset_deadlines_url': reset_deadlines_url,
-            'reset_deadlines_redirect_url_base': reset_deadlines_redirect_url_base,
-            'reset_deadlines_redirect_url_id_dict': {'course_id': str(course.id)}
         }
         # Avoid Multiple Mathjax loading on the 'user_profile'
         if 'profile_page_context' in kwargs:
@@ -1078,9 +1061,7 @@ def dates(request, course_id):
     user_timezone = user_timezone_locale['user_timezone']
     user_language = user_timezone_locale['user_language']
 
-    display_reset_dates_text = False
-    if RELATIVE_DATES_FLAG.is_enabled(course.id):
-        display_reset_dates_text = reset_deadlines_banner_should_display(course_key, request)
+    missed_deadlines, enrollment_mode = reset_deadlines_banner_should_display(course_key, request)
 
     context = {
         'course': course,
@@ -1092,7 +1073,9 @@ def dates(request, course_id):
         'supports_preview_menu': True,
         'can_masquerade': can_masquerade,
         'masquerade': masquerade,
-        'display_reset_dates_text': display_reset_dates_text,
+        'on_dates_tab': True,
+        'missed_deadlines': missed_deadlines,
+        'enrollment_mode': enrollment_mode,
         'reset_deadlines_url': reverse(RESET_COURSE_DEADLINES_NAME),
         'reset_deadlines_redirect_url_base': COURSE_DATES_NAME,
         'reset_deadlines_redirect_url_id_dict': {'course_id': str(course.id)}
