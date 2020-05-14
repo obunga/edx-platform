@@ -2,7 +2,6 @@
 Unit tests for course import and export
 """
 
-
 import copy
 import json
 import logging
@@ -55,6 +54,7 @@ class ImportEntranceExamTestCase(CourseTestCase, MilestonesTestCaseMixin):
     """
     Unit tests for importing a course with entrance exam
     """
+
     def setUp(self):
         super(ImportEntranceExamTestCase, self).setUp()
         self.url = reverse_course_url('import_handler', self.course.id)
@@ -533,6 +533,7 @@ class ExportTestCase(CourseTestCase):
     """
     Tests for export_handler.
     """
+
     def setUp(self):
         """
         Sets up the test course.
@@ -788,9 +789,9 @@ class ExportTestCase(CourseTestCase):
     @patch('contentstore.views.import_export._latest_task_status')
     @patch('user_tasks.models.UserTaskArtifact.objects.get')
     def test_export_status_handler_other(
-            self,
-            mock_get_user_task_artifact,
-            mock_latest_task_status,
+        self,
+        mock_get_user_task_artifact,
+        mock_latest_task_status,
     ):
         """
         Verify that the export status handler generates the correct export path
@@ -808,9 +809,9 @@ class ExportTestCase(CourseTestCase):
     @patch('contentstore.views.import_export._latest_task_status')
     @patch('user_tasks.models.UserTaskArtifact.objects.get')
     def test_export_status_handler_s3(
-            self,
-            mock_get_user_task_artifact,
-            mock_latest_task_status,
+        self,
+        mock_get_user_task_artifact,
+        mock_latest_task_status,
     ):
         """
         Verify that the export status handler generates the correct export path
@@ -828,9 +829,9 @@ class ExportTestCase(CourseTestCase):
     @patch('contentstore.views.import_export._latest_task_status')
     @patch('user_tasks.models.UserTaskArtifact.objects.get')
     def test_export_status_handler_filesystem(
-            self,
-            mock_get_user_task_artifact,
-            mock_latest_task_status,
+        self,
+        mock_get_user_task_artifact,
+        mock_latest_task_status,
     ):
         """
         Verify that the export status handler generates the correct export path
@@ -849,6 +850,7 @@ class TestLibraryImportExport(CourseTestCase):
     """
     Tests for importing content libraries from XML and exporting them to XML.
     """
+
     def setUp(self):
         super(TestLibraryImportExport, self).setUp()
         self.export_dir = tempfile.mkdtemp()
@@ -906,6 +908,7 @@ class TestCourseExportImport(LibraryTestCase):
     """
     Tests for importing after exporting the course containing content libraries from XML.
     """
+
     def setUp(self):
         super(TestCourseExportImport, self).setUp()
         self.export_dir = tempfile.mkdtemp()
@@ -1027,6 +1030,7 @@ class TestCourseExportImportProblem(CourseTestCase):
     """
     Tests for importing after exporting the course containing problem with pre tags from XML.
     """
+
     def setUp(self):
         super(TestCourseExportImportProblem, self).setUp()
         self.export_dir = tempfile.mkdtemp()
@@ -1059,6 +1063,7 @@ class TestCourseExportImportProblem(CourseTestCase):
             display_name='Test Problem',
             publish_item=publish_item,
             data='<problem><pre><code>x=10 print("hello \n")</code></pre>'
+                 '<pre><div><pre><code>x=10 print("hello \n")</code></pre></div></pre>'
                  '<multiplechoiceresponse></multiplechoiceresponse></problem>',
         )
 
@@ -1075,8 +1080,9 @@ class TestCourseExportImportProblem(CourseTestCase):
         """
         Asserts that problems' data is as expected with pre-tag content maintained.
         """
-        expected_problem_content = '<problem>\n  <pre>\n    <code>x=10 print("hello \n")</code>\n  </pre>\n  ' \
-                                   '<multiplechoiceresponse/>\n</problem>\n'
+        expected_problem_content = '<problem>\n  <pre>\n    <code>x=10 print("hello \n")</code>\n  </pre>\n  <pre>\n' \
+                                   '    <div>\n      <pre>\n        <code>x=10 print("hello \n")</code>\n' \
+                                   '      </pre>\n    </div>\n  </pre>\n  <multiplechoiceresponse/>\n</problem>\n'
         problem_content = self.get_problem_content(course_location)
         self.assertEqual(expected_problem_content, problem_content)
 
