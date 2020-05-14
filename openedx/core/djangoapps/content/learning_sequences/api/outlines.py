@@ -124,15 +124,23 @@ def _get_learning_context_for_outline(course_key: CourseKey) -> LearningContext:
 
 def get_user_course_outline(course_key: CourseKey,
                             user: User,
-                            at_time: datetime):
+                            at_time: datetime) -> UserCourseOutlineData:
+    """
+    Get an outline customized for a particular user at a particular time.
+
+    `user` is a Django User object (including the AnonymousUser)
+    `at_time` should be a UTC datetime.datetime object.
+    """
     user_course_outline, _ = _get_user_course_outline_and_processors(course_key, user, at_time)
     return user_course_outline
 
 def get_user_course_outline_details(course_key: CourseKey,
                                     user: User,
-                                    at_time: datetime):
+                                    at_time: datetime) -> UserCourseOutlineDetailsData:
+    """
+    Get an outline with supplementary data like scheduling information.
+    """
     user_course_outline, processors = _get_user_course_outline_and_processors(course_key, user, at_time)
-
     schedule_processor = processors['schedule']
 
     return UserCourseOutlineDetailsData(
@@ -143,23 +151,6 @@ def get_user_course_outline_details(course_key: CourseKey,
 def _get_user_course_outline_and_processors(course_key: CourseKey,
                                             user: User,
                                             at_time: datetime): # how do you do tuple responses of ordereddicts again?
-    """
-    Get an outline customized for a particular user at a particular time.
-
-    `user` is a Django User object (including the AnonymousUser)
-    `at_time` should be a UTC datetime.datetime object.
-
-
-    Have a method that returns UserCourseOutlineData and OutlineProcessors
-
-    Have the public method only return UserCourseOutlineData
-
-    Have a new type that combines UserCourseOutlineData with the output of some
-    known subset of OutlineProcessors for things like schedule data.
-
-    Use that last one in the view.
-
-    """
     full_course_outline = get_course_outline(course_key)
     has_staff_access = False
 
