@@ -109,8 +109,29 @@ class ScheduleData:
 @attr.s(frozen=True)
 class UserCourseOutlineData:
     """
-    The CourseOutline
+    A course outline that has been customized for a specific user and time.
     """
+    # This is a CourseOutlineData that has been trimmed to only show those
+    # things that a user is allowed to know exists. For instance, any sequences
+    # that have been marked as `visible_to_staff_only` will not show up in the
+    # `outline` for a student.
     outline = attr.ib(type=CourseOutlineData)
+
+    # Django User representing who we've customized this outline for. This may
+    # be the AnonymousUser.
     user = attr.ib(type=User)
-    schedule = attr.ib(type=ScheduleData)
+
+    # UTC TZ time representing the time for which this user course outline was
+    # created. It is possible to create UserCourseOutlineData for a time in the
+    # future (i.e. "What will this user be able to see next week?")
+    at_time = attr.ib(type=datetime)
+
+    # What Sequences is this `user` allowed to access? Anything in the `outline`
+    # is something that the `user` is allowed to know exists, but they might not
+    # be able to actually interact with it. For example:
+    # * A user might see an exam that has closed, but not be able to access it
+    #   any longer.
+    # * If anonymous course access is enabled in "public_outline" mode,
+    #   unauthenticated users (AnonymousUser) will see the course outline but
+    #   not be able to access anything inside.
+    accessible_sequences = attr.ib(type=Set[UsageKey])

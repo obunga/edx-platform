@@ -120,13 +120,13 @@ def _get_learning_context_for_outline(course_key: CourseKey) -> LearningContext:
     return learning_context
 
 
-def get_accessible_course_outline(course_key: CourseKey,
-                                  user: User,
-                                  at_time: datetime) -> CourseOutlineData:
+def get_user_course_outline(course_key: CourseKey,
+                            user: User,
+                            at_time: datetime): # how do you do tuple responses of ordereddicts again?
     """
-    Get an outline that has been limited to what a user is allowed to see.
+    Get an outline customized for a particular user at a particular time.
 
-    `user` may be a Django User object or None (i.e. unauthenticated)
+    `user` is a Django User object (including the AnonymousUser)
     `at_time` should be a UTC datetime.datetime object.
 
     Note that "accessible" is not exactly the same as "visible" as it's possible
@@ -134,42 +134,48 @@ def get_accessible_course_outline(course_key: CourseKey,
     tutorials, content only intended to be served as an LTI provider, etc.).
     This function will return these items, and it's up to the caller to decide
     how they should be presented.
-
-    TODO: Should we return a tuple here of (CourseOutlineData, Processors) so
-    that we don't recompute things that are needed to create supplemental
-    information?
-    """
-    pass
-
-
-def get_course_outline_for_user(course_key: CourseKey,
-                                user: User,
-                                at_time: datetime) -> UserCourseOutlineData:
-    """
-    Get an outline customized for a particular user at a particular time.
-
-    `user` is a Django User object (including the AnonymousUser)
-    `at_time` should be a UTC datetime.datetime object.
-
-    We shouldn't force people to have all this supplementary information if they
-    don't want it. Separate a) the processors; b) cutting away inaccessible
-    content vs. adding supplementary information.
     """
     full_course_outline = get_course_outline(course_key)
+    has_staff_access = False
 
-    # Add something to the data structure to add User + current time <- new data
-    # type?
+    # These are processors that alter which sequences are visible to students.
+    # For instance, certain sequences that are intentionally hidden or not yet
+    # released. These do not need to be run for staff users.
+    processor_classes = [
+#        ('content_gating', ContentGatingOutlineProcessor),
+#        ('milestones', MilestonesOutlineProcessor),
+#        ('user_partitions', UserPartitionsOutlineProcessor),
+        ('schedule', ScheduleOutlineProcessor),
+    ]
 
-    s = ScheduleOutlineProcessor(course_key, user, at_time)
-    s.load_data()
+    # Run each OutlineProcessor in order to figure out what items we have to
+    # remove from the CourseOutline.
+    processors = dict()
+    usage_keys_to_remove = set()
+    inaccessible_usage_keys = set()
+    for name, processor_cls in processor_classes:
+        # TODO: put some instrumentation here so we know what's taking longer...
+        # Future optimization: This should be parallelizable (don't rely on a
+        # particular ordering).
+        processor = processor_cls(course_key, user, at_time)
+        processors[name] = processor
+        processor.load_data()
+        if not has_staff_access:
+            usage_keys_to_remove |= processor.usage_keys_to_remove(full_course_outline)
+            inaccessible_usage_keys |= processor.inaccessible_usage_keys(full_course_outline)
 
     user_course_outline = UserCourseOutlineData(
         outline=full_course_outline,  # hasn't been transformed yet, should.
         user=user,
-        schedule=s.data_to_add(full_course_outline),
+        at_time=at_time,
+        accessible_sequences=frozenset(),
     )
-    return user_course_outline
 
+    return user_course_outline, processors
+
+
+def remove_from_course_outline(course_outline, seq_usage_keys):
+    pass
 
 
 def replace_course_outline(course_outline: CourseOutlineData):

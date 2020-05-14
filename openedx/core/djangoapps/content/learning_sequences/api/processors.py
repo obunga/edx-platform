@@ -17,7 +17,7 @@ with the understanding that it's not part of the external contract yet.
 
 """
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from datetime import datetime
 
 from django.contrib.auth import get_user_model
@@ -29,6 +29,7 @@ from .data import ScheduleData, ScheduleItemData
 
 User = get_user_model()
 log = logging.getLogger(__name__)
+
 
 
 class OutlineProcessor:
@@ -56,23 +57,22 @@ class OutlineProcessor:
         """
         raise NotImplementedError()
 
-    def usage_keys_to_hide(self, full_course_outline):
+    def inaccessible_usage_keys(self, full_course_outline):
         """
-        Return a set/frozenset of UsageKeys to hide.
+        Return a set/frozenset of UsageKeys that are not accessible.
+
+        This will not be run for staff users.
         """
         raise NotImplementedError()
 
-    def data_to_add(self, updated_course_outline):
+    def usage_keys_to_remove(self, full_course_outline):
         """
-        Return the data we want to add to this CourseOutlineData.
+        Return a set/frozenset of UsageKeys to remove altogether.
 
-        Unlike `usage_keys_to_hide`, this method gets a CourseOutlineData
-        that only has those LearningSequences that a user has permission to
-        access. We can use this to make sure that we're not returning data about
-        LearningSequences that the user can't see because it was hidden by a
-        different OutlineProcessor.
+        This should not be run for staff users.
         """
-        raise NotImplementedError
+        raise NotImplementedError()
+
 
 
 class ScheduleOutlineProcessor(OutlineProcessor):
@@ -82,20 +82,49 @@ class ScheduleOutlineProcessor(OutlineProcessor):
         self.dates = None
         self.keys_to_schedule_fields = defaultdict(dict)
 
+        self._inaccessible_usage_keys = None
+
     def load_data(self):
         # (usage_key, 'due'): datetime.datetime(2019, 12, 11, 15, 0, tzinfo=<UTC>)
         self.dates = get_dates_for_course(self.course_key, self.user)
         for (usage_key, field_name), date in self.dates.items():
             self.keys_to_schedule_fields[usage_key][field_name] = date
 
-    def usage_keys_to_hide(self, full_course_outline):
+    def usage_keys_to_remove(self, full_course_outline):
         """
-        Each
-        """
-        # Return a set/frozenset of usage keys to hide
-        pass
+        Set of UsageKeys to remove from the CourseOutline.
 
-    def data_to_add(self, updated_course_outline):
+        We never hide the existence of a piece of content because of start or
+        due dates. Content may be inaccessible because it has yet to be released
+        or the exam has closed, but students are never prevented from knowing
+        the content exists based on the start and due date information.
+        """
+        return frozenset()
+
+    def inaccessible_usage_keys(self, full_course_outline):
+        """
+        Set of UsageKeys for Sequences that are visible, but inaccessible.
+
+        This might include Sequences that have not yet started, or Sequences
+        for exams that have closed.
+        """
+        if self._inaccessible_usage_keys is not None:
+            return self._inaccessible_usage_keys
+
+        return set()
+
+    # The problem with declaring this in a superclass is that its subclasses
+    # would want to return different data types.
+    def schedule_data(self, pruned_course_outline):
+        """
+        Return the data we want to add to this CourseOutlineData.
+
+        Unlike `hidden_usage_keys`, this method gets a CourseOutlineData
+        that only has those LearningSequences that a user has permission to
+        access. We can use this to make sure that we're not returning data about
+        LearningSequences that the user can't see because it was hidden by a
+        different OutlineProcessor.
+        """
         return ScheduleData(sequences={
             usage_key: ScheduleItemData(
                 usage_key=usage_key,
@@ -103,7 +132,7 @@ class ScheduleOutlineProcessor(OutlineProcessor):
                 due=fields.get('due'),
             )
             for usage_key, fields in self.keys_to_schedule_fields.items()
-            if usage_key in updated_course_outline.sequences
+            if usage_key in pruned_course_outline.sequences
         })
 
     #def disable_set(self, course_outline):
@@ -116,14 +145,24 @@ class VisiblityOutlineProcessor:
 
 
 
-def process():
+def process(course_key: CourseKey, user: User, at_time: datetime):
     # These are processors that alter which sequences are visible to students.
     # For instance, certain sequences that are intentionally hidden or not yet
     # released. These do not need to be run for staff users.
-    visibility_processors = [
-
-        ScheduleOutlineProcessor(),
+    processor_classes = [
+        ('content_gating', ContentGatingOutlineProcessor),
+        ('milestones', MilestonesOutlineProcessor),
+        ('user_partitions', UserPartitionsOutlineProcessor),
+        ('schedule', ScheduleOutlineProcessor),
     ]
+
+    processor_output = OrderedDict()
+    for name, processor_cls in processor_classes:
+        # Put some instrumentation here so we know what's taking longer...
+
+
+        pass
+
 
     # Phase 1:
     sequence_keys_to_hide = set()
