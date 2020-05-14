@@ -1,7 +1,4 @@
 """
-How to diffentiate between data structures we want to promise as an external
-interface vs. internal? Just don't return them? Only export them from api.py?
-
 Note: we're using old-style syntax for attrs because we need to support Python
 3.5, but we can move to the PEP-526 style once we move to Python 3.6+.
 
@@ -92,6 +89,17 @@ class CourseOutlineData:
     visibility = attr.ib(type=CourseItemVisibilityData)
 
     # outline_updated_at
+    def remove(self, usage_keys):
+        """
+        Create a new CourseOutlineData by removing a set of UsageKeys.
+
+        The UsageKeys can be for Sequences or Sections/Chapters. Removing a
+        Section will remove all Sequences in that Section.
+        """
+        keys_to_remove = set(usage_keys)
+
+        # Placeholder: not really working yet
+        return self
 
 
 @attr.s(frozen=True)
@@ -107,15 +115,23 @@ class ScheduleData:
 
 
 @attr.s(frozen=True)
-class UserCourseOutlineData:
+class UserCourseOutlineData(CourseOutlineData):
     """
     A course outline that has been customized for a specific user and time.
+
+    This is a subclass of CourseOutlineData that has been trimmed to only show
+    those things that a user is allowed to know exists. That being said, this
+    class is a pretty dumb container that doesn't understand anything about how
+    to derive that trimmed-down state. It's the responsibility of functions in
+    the learning_sequences.api package to figure out how to derive the correct
+    values to instantiate this class.
     """
-    # This is a CourseOutlineData that has been trimmed to only show those
-    # things that a user is allowed to know exists. For instance, any sequences
-    # that have been marked as `visible_to_staff_only` will not show up in the
-    # `outline` for a student.
-    outline = attr.ib(type=CourseOutlineData)
+    # The CourseOutlineData that this UserCourseOutlineData is ultimately
+    # derived from. If we have an instance of a UserCourseOutlineData and need
+    # to reach up into parts of a Course that the user is not normally allowed
+    # to know the existence of (e.g. Sequences marked `visible_to_staff_only`),
+    # we can use this attribute.
+    base_outline = attr.ib(type=CourseOutlineData)
 
     # Django User representing who we've customized this outline for. This may
     # be the AnonymousUser.
@@ -135,3 +151,15 @@ class UserCourseOutlineData:
     #   unauthenticated users (AnonymousUser) will see the course outline but
     #   not be able to access anything inside.
     accessible_sequences = attr.ib(type=Set[UsageKey])
+
+
+@attr.s(frozen=True)
+class UserCourseOutlineDetailsData:
+    """
+    Class that has a user's course outline plus useful details (like schedules).
+    """
+    outline = attr.ib(type=UserCourseOutlineData)
+    schedule = attr.ib(type=ScheduleData)
+
+
+

@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Optional
 
+import attr
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from edx_django_utils.cache import TieredCache, get_cache_key
@@ -10,7 +11,7 @@ from opaque_keys.edx.keys import CourseKey, UsageKey
 
 from .data import (
     CourseItemVisibilityData, CourseOutlineData, CourseSectionData,
-    LearningSequenceData, UserCourseOutlineData
+    LearningSequenceData, UserCourseOutlineData, UserCourseOutlineDetailsData
 )
 from ..models import (
     CourseSection, CourseSectionSequence, LearningContext, LearningSequence
@@ -23,7 +24,8 @@ log = logging.getLogger(__name__)
 # Public API...
 __all__ = [
     'get_course_outline',
-    'get_course_outline_for_user',
+    'get_user_course_outline',
+    'get_user_course_outline_details',
     'replace_course_outline',
 ]
 
@@ -122,18 +124,41 @@ def _get_learning_context_for_outline(course_key: CourseKey) -> LearningContext:
 
 def get_user_course_outline(course_key: CourseKey,
                             user: User,
-                            at_time: datetime): # how do you do tuple responses of ordereddicts again?
+                            at_time: datetime):
+    user_course_outline, _ = _get_user_course_outline_and_processors(course_key, user, at_time)
+    return user_course_outline
+
+def get_user_course_outline_details(course_key: CourseKey,
+                                    user: User,
+                                    at_time: datetime):
+    user_course_outline, processors = _get_user_course_outline_and_processors(course_key, user, at_time)
+
+    schedule_processor = processors['schedule']
+
+    return UserCourseOutlineDetailsData(
+        outline=user_course_outline,
+        schedule=schedule_processor.schedule_data(user_course_outline)
+    )
+
+def _get_user_course_outline_and_processors(course_key: CourseKey,
+                                            user: User,
+                                            at_time: datetime): # how do you do tuple responses of ordereddicts again?
     """
     Get an outline customized for a particular user at a particular time.
 
     `user` is a Django User object (including the AnonymousUser)
     `at_time` should be a UTC datetime.datetime object.
 
-    Note that "accessible" is not exactly the same as "visible" as it's possible
-    for some sequences to be hidden from navigation (e.g. supplementary
-    tutorials, content only intended to be served as an LTI provider, etc.).
-    This function will return these items, and it's up to the caller to decide
-    how they should be presented.
+
+    Have a method that returns UserCourseOutlineData and OutlineProcessors
+
+    Have the public method only return UserCourseOutlineData
+
+    Have a new type that combines UserCourseOutlineData with the output of some
+    known subset of OutlineProcessors for things like schedule data.
+
+    Use that last one in the view.
+
     """
     full_course_outline = get_course_outline(course_key)
     has_staff_access = False
@@ -164,18 +189,21 @@ def get_user_course_outline(course_key: CourseKey,
             usage_keys_to_remove |= processor.usage_keys_to_remove(full_course_outline)
             inaccessible_usage_keys |= processor.inaccessible_usage_keys(full_course_outline)
 
+    trimmed_course_outline = full_course_outline.remove(usage_keys_to_remove)
+    accessible_sequences = set(trimmed_course_outline.sequences) - inaccessible_usage_keys
+
     user_course_outline = UserCourseOutlineData(
-        outline=full_course_outline,  # hasn't been transformed yet, should.
+        base_outline=full_course_outline,
         user=user,
         at_time=at_time,
-        accessible_sequences=frozenset(),
+        accessible_sequences=accessible_sequences,
+        **{
+            name: getattr(trimmed_course_outline, name)
+            for name in attr.fields_dict(CourseOutlineData)
+        }
     )
 
     return user_course_outline, processors
-
-
-def remove_from_course_outline(course_outline, seq_usage_keys):
-    pass
 
 
 def replace_course_outline(course_outline: CourseOutlineData):

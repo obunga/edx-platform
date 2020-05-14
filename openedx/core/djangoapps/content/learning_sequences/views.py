@@ -8,36 +8,43 @@ import json
 from opaque_keys.edx.keys import CourseKey
 import attr
 
+from edx_rest_framework_extensions.auth.jwt.authentication import JwtAuthentication
+from edx_rest_framework_extensions.auth.session.authentication import SessionAuthenticationAllowInactiveUser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
+from openedx.core.lib.api.permissions import IsStaff
 from .api.data import ScheduleData, UserCourseOutlineData
-from .api import get_user_course_outline
+from .api import get_user_course_outline_details
 
 
 class CourseOutlineView(APIView):
     """
     Display all CourseOutline information for a given user.
     """
+    # We want to eventually allow unauthenticated users to use this as well...
+    authentication_classes = (JwtAuthentication, SessionAuthenticationAllowInactiveUser)
+
+    # For early testing, restrict this to only global staff...
+    permission_classes = (IsStaff,)
 
     class UserCourseOutlineDataSerializer(BaseSerializer):
         """Read-only serializer for CourseOutlineData for this endpoint."""
-        def to_representation(self, outline_response_data):
+        def to_representation(self, user_course_outline_details):
             """
             Convert to something DRF knows how to serialize (so no custom types)
 
             This is intentionally dumb and lists out every field to make API
             additions/changes more obvious.
             """
-            schedule = outline_response_data.schedule
-            user_course_outline = outline_response_data.user_course_outline
-            course_outline_data = user_course_outline.outline
+            schedule = user_course_outline_details.schedule
+            user_course_outline = user_course_outline_details.outline
             return {
-                "course_key": str(course_outline_data.course_key),
-                "title": course_outline_data.title,
-                "published_at": course_outline_data.published_at,
-                "published_version": course_outline_data.published_version,
+                "course_key": str(user_course_outline.course_key),
+                "title": user_course_outline.title,
+                "published_at": user_course_outline.published_at,
+                "published_version": user_course_outline.published_version,
                 "sections": [
                     {
                         "usage_key": str(section.usage_key),
@@ -46,14 +53,14 @@ class CourseOutlineView(APIView):
                             str(seq.usage_key) for seq in section.sequences
                         ]
                     }
-                    for section in course_outline_data.sections
+                    for section in user_course_outline.sections
                 ],
                 "sequences": {
                     str(usage_key): {
                         "usage_key": str(usage_key),
                         "title": seq_data.title,
                     }
-                    for usage_key, seq_data in course_outline_data.sequences.items()
+                    for usage_key, seq_data in user_course_outline.sequences.items()
                 },
                 "schedule": {
                     "sequences": {
@@ -67,21 +74,14 @@ class CourseOutlineView(APIView):
                 },
                 "visibility": {
                     "hide_from_toc": [
-                        str(usage_key) for usage_key in course_outline_data.visibility.hide_from_toc
+                        str(usage_key) for usage_key in user_course_outline.visibility.hide_from_toc
                     ],
                     # There should probably be a staff_info section we move this to...
                     "visible_to_staff_only": [
-                        str(usage_key) for usage_key in course_outline_data.visibility.visible_to_staff_only
+                        str(usage_key) for usage_key in user_course_outline.visibility.visible_to_staff_only
                     ],
                 }
             }
-
-
-    @attr.s(frozen=True)
-    class OutlineResponseData:
-        user_course_outline = attr.ib(type=UserCourseOutlineData)
-        schedule = attr.ib(type=ScheduleData)
-
 
     def get(self, request, course_key_str, format=None):
         """
@@ -106,13 +106,6 @@ class CourseOutlineView(APIView):
         at_time = datetime.now(timezone.utc)
 
         # Grab the user's outline and any supplemental OutlineProcessor info we need...
-        user_course_outline, processors = get_user_course_outline(course_key, request.user, at_time)
-        schedule_processor = processors['schedule']
-
-        # Assemble our response data...
-        response_data = self.OutlineResponseData(
-            user_course_outline=user_course_outline,
-            schedule=schedule_processor.schedule_data(user_course_outline.outline),
-        )
-        serializer = self.UserCourseOutlineDataSerializer(response_data)
+        user_course_outline_details = get_user_course_outline_details(course_key, request.user, at_time)
+        serializer = self.UserCourseOutlineDataSerializer(user_course_outline_details)
         return Response(serializer.data)
