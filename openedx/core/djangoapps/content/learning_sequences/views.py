@@ -4,19 +4,24 @@
 """
 from datetime import datetime, timezone
 import json
+import logging
 
-from opaque_keys.edx.keys import CourseKey
-import attr
-
+from django.contrib.auth import get_user_model
 from edx_rest_framework_extensions.auth.jwt.authentication import JwtAuthentication
 from edx_rest_framework_extensions.auth.session.authentication import SessionAuthenticationAllowInactiveUser
+from opaque_keys.edx.keys import CourseKey
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
+import attr
 
 from openedx.core.lib.api.permissions import IsStaff
 from .api.data import ScheduleData, UserCourseOutlineData
 from .api import get_user_course_outline_details
+
+
+User = get_user_model()
+log = logging.getLogger(__name__)
 
 
 class CourseOutlineView(APIView):
@@ -42,6 +47,7 @@ class CourseOutlineView(APIView):
             user_course_outline = user_course_outline_details.outline
             return {
                 "course_key": str(user_course_outline.course_key),
+                "username": str(user_course_outline.user.username),
                 "title": user_course_outline.title,
                 "published_at": user_course_outline.published_at,
                 "published_version": user_course_outline.published_version,
@@ -63,6 +69,16 @@ class CourseOutlineView(APIView):
                     for usage_key, seq_data in user_course_outline.sequences.items()
                 },
                 "schedule": {
+                    "course_start": schedule.course_start,
+                    "course_end": schedule.course_end,
+                    "sections": {
+                        str(sched_item_data.usage_key): {
+                            "usage_key": str(sched_item_data.usage_key),
+                            "start": sched_item_data.start,  # can be None
+                            "due": sched_item_data.due,      # can be None
+                        }
+                        for sched_item_data in schedule.sections.values()
+                    },
                     "sequences": {
                         str(sched_item_data.usage_key): {
                             "usage_key": str(sched_item_data.usage_key),
@@ -104,8 +120,20 @@ class CourseOutlineView(APIView):
         # Translate input params and do any substitutions...
         course_key = CourseKey.from_string(course_key_str)
         at_time = datetime.now(timezone.utc)
+        user = self._determine_user(request)
 
         # Grab the user's outline and any supplemental OutlineProcessor info we need...
-        user_course_outline_details = get_user_course_outline_details(course_key, request.user, at_time)
+        user_course_outline_details = get_user_course_outline_details(course_key, user, at_time)
         serializer = self.UserCourseOutlineDataSerializer(user_course_outline_details)
         return Response(serializer.data)
+
+    def _determine_user(self, request):
+        # Requesting for a different user (easiest way to test for students)
+        # while restricting access to only global staff...
+        requested_username = request.GET.get("username")
+        if request.user.is_staff and requested_username:
+            return User.objects.get(username=requested_username)
+
+        return request.user
+
+

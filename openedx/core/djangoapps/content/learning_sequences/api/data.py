@@ -111,6 +111,9 @@ class ScheduleItemData:
 
 @attr.s(frozen=True)
 class ScheduleData:
+    course_start = attr.ib(type=Optional[datetime])
+    course_end = attr.ib(type=Optional[datetime])
+    sections = attr.ib(type=Dict[UsageKey, ScheduleItemData])
     sequences = attr.ib(type=Dict[UsageKey, ScheduleItemData])
 
 

@@ -73,6 +73,13 @@ class OutlineProcessor:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def is_sequence(cls, usage_key):
+        return usage_key.block_type == 'sequential'
+
+    @classmethod
+    def is_section(cls, usage_key):
+        return usage_key.block_type == 'chapter'
 
 
 class ScheduleOutlineProcessor(OutlineProcessor):
@@ -125,15 +132,32 @@ class ScheduleOutlineProcessor(OutlineProcessor):
         LearningSequences that the user can't see because it was hidden by a
         different OutlineProcessor.
         """
-        return ScheduleData(sequences={
-            usage_key: ScheduleItemData(
-                usage_key=usage_key,
-                start=fields.get('start'),
-                due=fields.get('due'),
-            )
-            for usage_key, fields in self.keys_to_schedule_fields.items()
-            if usage_key in pruned_course_outline.sequences
-        })
+        pruned_section_keys = {section.usage_key for section in pruned_course_outline.sections}
+        sequences = {}
+        sections = {}
+        for usage_key, fields in self.keys_to_schedule_fields.items():
+            if self.is_sequence(usage_key) and usage_key in pruned_course_outline.sequences:
+                sequences[usage_key] = ScheduleItemData(
+                    usage_key=usage_key,
+                    start=fields.get('start'),
+                    due=fields.get('due'),
+                )
+            elif self.is_section(usage_key) and usage_key in pruned_section_keys:
+                sections[usage_key] = ScheduleItemData(
+                    usage_key=usage_key,
+                    start=fields.get('start'),
+                    due=fields.get('due'),
+                )
+            elif usage_key.block_type == 'course':
+                course_start = fields.get('start')
+                course_end = fields.get('end')
+
+        return ScheduleData(
+            course_start=course_start,
+            course_end=course_end,
+            sections=sections,
+            sequences=sequences,
+        )
 
     #def disable_set(self, course_outline):
     #    # ???
