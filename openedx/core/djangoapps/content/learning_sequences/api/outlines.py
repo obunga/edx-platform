@@ -16,7 +16,7 @@ from .data import (
 from ..models import (
     CourseSection, CourseSectionSequence, LearningContext, LearningSequence
 )
-from .processors import ScheduleOutlineProcessor
+from .processors.schedule import ScheduleOutlineProcessor
 
 User = get_user_model()
 log = logging.getLogger(__name__)
@@ -122,6 +122,9 @@ def _get_learning_context_for_outline(course_key: CourseKey) -> LearningContext:
     return learning_context
 
 
+import cProfile
+import pstats
+
 def get_user_course_outline(course_key: CourseKey,
                             user: User,
                             at_time: datetime) -> UserCourseOutlineData:
@@ -140,8 +143,14 @@ def get_user_course_outline_details(course_key: CourseKey,
     """
     Get an outline with supplementary data like scheduling information.
     """
+#    pr = cProfile.Profile()
+#    pr.enable()
+
     user_course_outline, processors = _get_user_course_outline_and_processors(course_key, user, at_time)
     schedule_processor = processors['schedule']
+
+#    pr.disable()
+#    pr.dump_stats("/edx/app/edxapp/edx-platform/stats/outline/hello.stats")
 
     return UserCourseOutlineDetailsData(
         outline=user_course_outline,
@@ -168,7 +177,7 @@ def _get_user_course_outline_and_processors(course_key: CourseKey,
     # remove from the CourseOutline.
     processors = dict()
     usage_keys_to_remove = set()
-    inaccessible_usage_keys = set()
+    inaccessible_sequences = set()
     for name, processor_cls in processor_classes:
         # TODO: put some instrumentation here so we know what's taking longer...
         # Future optimization: This should be parallelizable (don't rely on a
@@ -178,10 +187,10 @@ def _get_user_course_outline_and_processors(course_key: CourseKey,
         processor.load_data()
         if not has_staff_access:
             usage_keys_to_remove |= processor.usage_keys_to_remove(full_course_outline)
-            inaccessible_usage_keys |= processor.inaccessible_usage_keys(full_course_outline)
+            inaccessible_sequences |= processor.inaccessible_sequences(full_course_outline)
 
     trimmed_course_outline = full_course_outline.remove(usage_keys_to_remove)
-    accessible_sequences = set(trimmed_course_outline.sequences) - inaccessible_usage_keys
+    accessible_sequences = set(trimmed_course_outline.sequences) - inaccessible_sequences
 
     user_course_outline = UserCourseOutlineData(
         base_outline=full_course_outline,

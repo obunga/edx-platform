@@ -49,6 +49,7 @@ class CourseOutlineView(APIView):
                 "course_key": str(user_course_outline.course_key),
                 "username": str(user_course_outline.user.username),
                 "title": user_course_outline.title,
+                "at_time": user_course_outline.at_time,
                 "published_at": user_course_outline.published_at,
                 "published_version": user_course_outline.published_version,
                 "sections": [
@@ -65,6 +66,7 @@ class CourseOutlineView(APIView):
                     str(usage_key): {
                         "usage_key": str(usage_key),
                         "title": seq_data.title,
+                        "accessible": usage_key in user_course_outline.accessible_sequences,
                     }
                     for usage_key, seq_data in user_course_outline.sequences.items()
                 },
@@ -75,6 +77,7 @@ class CourseOutlineView(APIView):
                         str(sched_item_data.usage_key): {
                             "usage_key": str(sched_item_data.usage_key),
                             "start": sched_item_data.start,  # can be None
+                            "effective_start": sched_item_data.effective_start,  # can be None
                             "due": sched_item_data.due,      # can be None
                         }
                         for sched_item_data in schedule.sections.values()
@@ -83,6 +86,7 @@ class CourseOutlineView(APIView):
                         str(sched_item_data.usage_key): {
                             "usage_key": str(sched_item_data.usage_key),
                             "start": sched_item_data.start,  # can be None
+                            "effective_start": sched_item_data.effective_start,  # can be None
                             "due": sched_item_data.due,      # can be None
                         }
                         for sched_item_data in schedule.sequences.values()
@@ -122,7 +126,7 @@ class CourseOutlineView(APIView):
         at_time = datetime.now(timezone.utc)
         user = self._determine_user(request)
 
-        # Grab the user's outline and any supplemental OutlineProcessor info we need...
+        # Grab the user's outline and send our response...
         user_course_outline_details = get_user_course_outline_details(course_key, user, at_time)
         serializer = self.UserCourseOutlineDataSerializer(user_course_outline_details)
         return Response(serializer.data)
@@ -130,7 +134,7 @@ class CourseOutlineView(APIView):
     def _determine_user(self, request):
         # Requesting for a different user (easiest way to test for students)
         # while restricting access to only global staff...
-        requested_username = request.GET.get("username")
+        requested_username = request.GET.get("user")
         if request.user.is_staff and requested_username:
             return User.objects.get(username=requested_username)
 

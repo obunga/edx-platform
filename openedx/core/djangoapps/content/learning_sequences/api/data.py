@@ -105,7 +105,12 @@ class CourseOutlineData:
 @attr.s(frozen=True)
 class ScheduleItemData:
     usage_key = attr.ib(type=UsageKey)
+
+    # Start date that is specified for this item
     start = attr.ib(type=Optional[datetime])
+
+    # Effective release date that it's available (may be affected by parents)
+    effective_start = attr.ib(type=Optional[datetime])
     due = attr.ib(type=Optional[datetime])
 
 
