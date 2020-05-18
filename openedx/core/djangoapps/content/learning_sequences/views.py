@@ -44,8 +44,12 @@ class CourseOutlineView(APIView):
             additions/changes more obvious.
             """
             user_course_outline = user_course_outline_details.outline
+            schedule = user_course_outline_details.schedule
             return {
                 "course_key": str(user_course_outline.course_key),
+                "course_start": schedule.course_start,
+                "course_end": schedule.course_end,
+
                 "username": str(user_course_outline.user.username),
                 "title": user_course_outline.title,
                 "at_time": user_course_outline.at_time,
@@ -53,50 +57,72 @@ class CourseOutlineView(APIView):
                 "published_version": user_course_outline.published_version,
                 "outline": {
                     "sections": [
-                        {
-                            "usage_key": str(section.usage_key),
-                            "title": section.title,
-                            "sequences": [
-                                str(seq.usage_key) for seq in section.sequences
-                            ]
-                        }
+                        self._section_repr(section, schedule.sections.get(section.usage_key))
                         for section in user_course_outline.sections
                     ],
                     "sequences": {
-                        str(usage_key): {
-                            "usage_key": str(usage_key),
-                            "title": seq_data.title,
-                            "accessible": usage_key in user_course_outline.accessible_sequences,
-                        }
-                        for usage_key, seq_data in user_course_outline.sequences.items()
+                        str(seq_usage_key): self._sequence_repr(
+                            sequence,
+                            schedule.sequences.get(seq_usage_key),
+                            user_course_outline.accessible_sequences,
+                        )
+                        for seq_usage_key, sequence in user_course_outline.sequences.items()
                     },
                 },
-                "schedule": self._schedule_repr(user_course_outline_details.schedule),
             }
 
-        def _schedule_repr(self, schedule):
-            return {
-                "course_start": schedule.course_start,
-                "course_end": schedule.course_end,
-                "sections": {
-                    str(sched_item_data.usage_key): {
-                        "usage_key": str(sched_item_data.usage_key),
-                        "start": sched_item_data.start,  # can be None
-                        "effective_start": sched_item_data.effective_start,  # can be None
-                        "due": sched_item_data.due,      # can be None
-                    }
-                    for sched_item_data in schedule.sections.values()
-                },
-                "sequences": {
-                    str(sched_item_data.usage_key): {
-                        "usage_key": str(sched_item_data.usage_key),
-                        "start": sched_item_data.start,  # can be None
-                        "effective_start": sched_item_data.effective_start,  # can be None
-                        "due": sched_item_data.due,      # can be None
-                    }
-                    for sched_item_data in schedule.sequences.values()
+        def _sequence_repr(self, sequence, sequence_schedule, accessible_sequences):
+            if sequence_schedule is None:
+                schedule_item_dict = {'start': None, 'effective_start': None, 'due': None}
+            else:
+                schedule_item_dict = {
+                    # Any of these values could be `None`
+                    'start': sequence_schedule.start,
+                    'effective_start': sequence_schedule.effective_start,
+                    'due': sequence_schedule.due,
                 }
+
+            return {
+                "id": str(sequence.usage_key),
+                "title": sequence.title,
+                "accessible": sequence.usage_key in accessible_sequences,
+                **schedule_item_dict,
             }
+
+        def _section_repr(self, section, section_schedule):
+            # Scheduling data is very similiar to Sequences, but there are no
+            # due dates for Sections. It's in the data model because OLX lets
+            # you put it there, but that's a quirk that API clients shouldn't
+            # have to care about.
+            if section_schedule is None:
+                schedule_item_dict = {'start': None, 'effective_start': None}
+            else:
+                schedule_item_dict = {
+                    # Any of these values could be `None`
+                    'start': section_schedule.start,
+                    'effective_start': section_schedule.effective_start,
+                }
+
+            return {
+                "id": str(section.usage_key),
+                "title": section.title,
+                "sequence_ids": [
+                    str(seq.usage_key) for seq in section.sequences
+                ],
+                **schedule_item_dict,
+            }
+
+        def _schedule_item_repr(self, schedule_item):
+            if schedule_item is None:
+                return {'start': None, 'effective_start': None, 'due': None}
+
+            return {
+                # Any of these values could be `None`
+                'start': schedule_item.start,
+                'effective_start': schedule_item.effective_start,
+                'due': schedule_item.due,
+            }
+
 
     def get(self, request, course_key_str, format=None):
         """
