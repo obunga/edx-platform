@@ -90,13 +90,13 @@ class CourseOutlineView(APIView):
             }
 
         def _section_repr(self, section, section_schedule):
-            # Scheduling data is very similiar to Sequences, but there are no
-            # due dates for Sections. It's in the data model because OLX lets
-            # you put it there, but that's a quirk that API clients shouldn't
-            # have to care about.
             if section_schedule is None:
                 schedule_item_dict = {'start': None, 'effective_start': None}
             else:
+                # Scheduling data is very similiar to Sequences, but there are
+                # no due dates for Sections. It's in the data model because OLX
+                # lets you put it there, but that's a quirk that API clients
+                # shouldn't have to care about.
                 schedule_item_dict = {
                     # Any of these values could be `None`
                     'start': section_schedule.start,
@@ -110,17 +110,6 @@ class CourseOutlineView(APIView):
                     str(seq.usage_key) for seq in section.sequences
                 ],
                 **schedule_item_dict,
-            }
-
-        def _schedule_item_repr(self, schedule_item):
-            if schedule_item is None:
-                return {'start': None, 'effective_start': None, 'due': None}
-
-            return {
-                # Any of these values could be `None`
-                'start': schedule_item.start,
-                'effective_start': schedule_item.effective_start,
-                'due': schedule_item.due,
             }
 
 
