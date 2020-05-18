@@ -11,7 +11,7 @@ from opaque_keys.edx.keys import CourseKey, UsageKey
 
 from .data import (
     CourseOutlineData, CourseSectionData,
-    LearningSequenceData, UserCourseOutlineData, UserCourseOutlineDetailsData,
+    CourseLearningSequenceData, UserCourseOutlineData, UserCourseOutlineDetailsData,
     VisibilityData,
 )
 from ..models import (
@@ -66,7 +66,7 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
 
     for sec_seq_model in section_sequence_models:
         sequence_model = sec_seq_model.sequence
-        sequence_data = LearningSequenceData(
+        sequence_data = CourseLearningSequenceData(
             usage_key=sequence_model.usage_key,
             title=sequence_model.title,
             visibility=VisibilityData(
@@ -316,7 +316,8 @@ def _update_course_section_sequences(course_outline: CourseOutlineData, learning
         in LearningSequence.objects.filter(learning_context=learning_context).all()
     }
 
-    for order, section_data in enumerate(course_outline.sections):
+    order = 0
+    for section_data in course_outline.sections:
         for sequence_data in section_data.sequences:
             CourseSectionSequence.objects.update_or_create(
                 learning_context=learning_context,
@@ -328,3 +329,4 @@ def _update_course_section_sequences(course_outline: CourseOutlineData, learning
                     'visible_to_staff_only': sequence_data.visibility.visible_to_staff_only,
                 },
             )
+            order += 1

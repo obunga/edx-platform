@@ -12,7 +12,7 @@ from xmodule.modulestore.django import modulestore, SignalHandler
 
 from .api import replace_course_outline
 from .api.data import (
-    CourseOutlineData, CourseSectionData, LearningSequenceData, VisibilityData
+    CourseOutlineData, CourseSectionData, CourseLearningSequenceData, VisibilityData
 )
 
 
@@ -40,7 +40,7 @@ def update_from_modulestore(course_key):
         sequences_data = []
         for sequence in section.get_children():
             sequences_data.append(
-                LearningSequenceData(
+                CourseLearningSequenceData(
                     usage_key=sequence.location,
                     title=sequence.display_name,
                     visibility=VisibilityData(

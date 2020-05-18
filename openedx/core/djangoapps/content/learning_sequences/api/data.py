@@ -21,17 +21,28 @@ log = logging.getLogger(__name__)
 
 @attr.s(frozen=True)
 class VisibilityData:
+    """
+    XBlock attributes that help determine item visibility.
+    """
+    # Obscure, deprecated attribute meant to allow content that is still
+    # accessible to the user, but is not supposed to show up in the course
+    # outline view. This could be used for things like tutorials.
     hide_from_toc = attr.ib(type=bool)
     visible_to_staff_only = attr.ib(type=bool)
 
 
 @attr.s(frozen=True)
-class LearningSequenceData:
+class CourseLearningSequenceData:
+    """
+    A Learning Sequence (a.k.a. subsection) from a Course.
+
+    It's possible that at some point we'll want a LearningSequenceData
+    superclass to encapsulate the minimum set of data that is shared between
+    learning sequences in Courses vs. Pathways vs. Libraries. Such an object
+    would likely not have `visibility` as that holds course-specific concepts.
+    """
     usage_key = attr.ib(type=UsageKey)
     title = attr.ib(type=str)
-
-    # Note: It might be that we'll eventually want visibility to only appear as
-    # a course-specific subclass of LearningSequenceData.
     visibility = attr.ib(type=VisibilityData)
 
 
@@ -39,7 +50,7 @@ class LearningSequenceData:
 class CourseSectionData:
     usage_key = attr.ib(type=UsageKey)
     title = attr.ib(type=str)
-    sequences = attr.ib(type=List[LearningSequenceData])
+    sequences = attr.ib(type=List[CourseLearningSequenceData])
     visibility = attr.ib(type=VisibilityData)
 
 
@@ -82,30 +93,35 @@ class CourseOutlineData:
     #
     sections = attr.ib(type=List[CourseSectionData])
 
-    #@sections.validator
-    #def sequences_exist(self, attribute, value):
-    #    for seq in value.sequences
-
     # Note that it's possible for a LearningSequence to appear in sequences and
     # not be in sections, e.g. if the Sequence's hide_from_toc=True
-    sequences = attr.ib(type=Dict[UsageKey, LearningSequenceData])
+    sequences = attr.ib(type=Dict[UsageKey, CourseLearningSequenceData])
 
-    # outline_updated_at
     def remove(self, usage_keys):
         """
         Create a new CourseOutlineData by removing a set of UsageKeys.
 
         The UsageKeys can be for Sequences or Sections/Chapters. Removing a
-        Section will remove all Sequences in that Section.
+        Section will remove all Sequences in that Section. It is not an error to
+        pass in UsageKeys that do not exist in the outline.
         """
         keys_to_remove = set(usage_keys)
+
+        # If we remove a Section, we also remove all Sequences in that Section.
+        for section in self.sections:
+            if section.usage_key in keys_to_remove:
+                keys_to_remove |= {seq.usage_key for seq in section.sequences}
 
         return attr.evolve(
             self,
             sections=[
                 attr.evolve(
                     section,
-                    sequences=[seq for seq in section.sequences if seq.usage_key not in keys_to_remove]
+                    sequences=[
+                        seq
+                        for seq in section.sequences
+                        if seq.usage_key not in keys_to_remove
+                    ]
                 )
                 for section in self.sections
                 if section.usage_key not in keys_to_remove
@@ -116,9 +132,6 @@ class CourseOutlineData:
                 if usage_key not in keys_to_remove
             },
         )
-
-        # Placeholder: not really working yet
-        return self
 
 
 @attr.s(frozen=True)

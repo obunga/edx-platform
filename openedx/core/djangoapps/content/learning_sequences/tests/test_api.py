@@ -9,7 +9,7 @@ from opaque_keys.edx.keys import CourseKey, UsageKey
 from opaque_keys.edx.locator import BlockUsageLocator
 
 from ..api.data import (
-    CourseOutlineData, CourseSectionData, LearningSequenceData, VisibilityData
+    CourseOutlineData, CourseSectionData, CourseLearningSequenceData, VisibilityData
 )
 from ..api import (
     get_course_outline, get_course_outline_for_user, replace_course_outline
