@@ -535,7 +535,7 @@ def get_course_assignments(course_key, user, request, include_access=False):
                 subsection_key, 'contains_gated_content', False)
             title = block_data.get_xblock_field(subsection_key, 'display_name', _('Assignment'))
 
-            url = None
+            url = ''
             start = block_data.get_xblock_field(subsection_key, 'start')
             assignment_released = not start or start < now
             if assignment_released:
