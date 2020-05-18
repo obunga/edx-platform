@@ -14,6 +14,13 @@ log = logging.getLogger(__name__)
 
 
 class ScheduleOutlineProcessor(OutlineProcessor):
+    """
+
+    Things we don't handle yet:
+    * Beta test users
+    * Self-paced courses
+    * Things that are made inaccessible after they're due.
+    """
 
     def __init__(self, course_key: CourseKey, user: User, at_time: datetime):
         super().__init__(course_key, user, at_time)

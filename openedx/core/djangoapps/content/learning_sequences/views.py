@@ -43,7 +43,6 @@ class CourseOutlineView(APIView):
             This is intentionally dumb and lists out every field to make API
             additions/changes more obvious.
             """
-            schedule = user_course_outline_details.schedule
             user_course_outline = user_course_outline_details.outline
             return {
                 "course_key": str(user_course_outline.course_key),
@@ -52,54 +51,50 @@ class CourseOutlineView(APIView):
                 "at_time": user_course_outline.at_time,
                 "published_at": user_course_outline.published_at,
                 "published_version": user_course_outline.published_version,
-                "sections": [
-                    {
-                        "usage_key": str(section.usage_key),
-                        "title": section.title,
-                        "sequences": [
-                            str(seq.usage_key) for seq in section.sequences
-                        ]
-                    }
-                    for section in user_course_outline.sections
-                ],
-                "sequences": {
-                    str(usage_key): {
-                        "usage_key": str(usage_key),
-                        "title": seq_data.title,
-                        "accessible": usage_key in user_course_outline.accessible_sequences,
-                    }
-                    for usage_key, seq_data in user_course_outline.sequences.items()
-                },
-                "schedule": {
-                    "course_start": schedule.course_start,
-                    "course_end": schedule.course_end,
-                    "sections": {
-                        str(sched_item_data.usage_key): {
-                            "usage_key": str(sched_item_data.usage_key),
-                            "start": sched_item_data.start,  # can be None
-                            "effective_start": sched_item_data.effective_start,  # can be None
-                            "due": sched_item_data.due,      # can be None
+                "outline": {
+                    "sections": [
+                        {
+                            "usage_key": str(section.usage_key),
+                            "title": section.title,
+                            "sequences": [
+                                str(seq.usage_key) for seq in section.sequences
+                            ]
                         }
-                        for sched_item_data in schedule.sections.values()
-                    },
+                        for section in user_course_outline.sections
+                    ],
                     "sequences": {
-                        str(sched_item_data.usage_key): {
-                            "usage_key": str(sched_item_data.usage_key),
-                            "start": sched_item_data.start,  # can be None
-                            "effective_start": sched_item_data.effective_start,  # can be None
-                            "due": sched_item_data.due,      # can be None
+                        str(usage_key): {
+                            "usage_key": str(usage_key),
+                            "title": seq_data.title,
+                            "accessible": usage_key in user_course_outline.accessible_sequences,
                         }
-                        for sched_item_data in schedule.sequences.values()
-                    }
+                        for usage_key, seq_data in user_course_outline.sequences.items()
+                    },
                 },
-                "visibility": {
-                    "hide_from_toc": [
-                        str(usage_key) for usage_key in user_course_outline.visibility.hide_from_toc
-                    ],
-                    # There should probably be a staff_info section we move this to...
-                    "visible_to_staff_only": [
-                        str(usage_key) for usage_key in user_course_outline.visibility.visible_to_staff_only
-                    ],
+                "schedule": self._schedule_repr(user_course_outline_details.schedule),
+            }
+
+        def _schedule_repr(self, schedule):
+            return {
+                "course_start": schedule.course_start,
+                "course_end": schedule.course_end,
+                "sections": {
+                    str(sched_item_data.usage_key): {
+                        "usage_key": str(sched_item_data.usage_key),
+                        "start": sched_item_data.start,  # can be None
+                        "effective_start": sched_item_data.effective_start,  # can be None
+                        "due": sched_item_data.due,      # can be None
+                    }
+                    for sched_item_data in schedule.sections.values()
+                },
+                "sequences": {
+                    str(sched_item_data.usage_key): {
+                        "usage_key": str(sched_item_data.usage_key),
+                        "start": sched_item_data.start,  # can be None
+                        "effective_start": sched_item_data.effective_start,  # can be None
+                        "due": sched_item_data.due,      # can be None
+                    }
+                    for sched_item_data in schedule.sequences.values()
                 }
             }
 

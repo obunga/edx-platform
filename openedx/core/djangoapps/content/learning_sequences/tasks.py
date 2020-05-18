@@ -12,7 +12,7 @@ from xmodule.modulestore.django import modulestore, SignalHandler
 
 from .api import replace_course_outline
 from .api.data import (
-    CourseOutlineData, CourseItemVisibilityData, CourseSectionData, LearningSequenceData
+    CourseOutlineData, CourseSectionData, LearningSequenceData, VisibilityData
 )
 
 
@@ -37,48 +37,40 @@ def update_from_modulestore(course_key):
     the LMS?
     """
     def _make_section_data(section):
-        hide_from_toc_set = set()
-        visible_to_staff_only_set = set()
-
-        if section.hide_from_toc:
-            hide_from_toc_set.add(section.location)
-        if section.visible_to_staff_only:
-            visible_to_staff_only_set.add(section.location)
-
         sequences_data = []
         for sequence in section.get_children():
             sequences_data.append(
                 LearningSequenceData(
                     usage_key=sequence.location,
                     title=sequence.display_name,
+                    visibility=VisibilityData(
+                        hide_from_toc=sequence.hide_from_toc,
+                        visible_to_staff_only=sequence.visible_to_staff_only
+                    ),
                 )
             )
-            if sequence.hide_from_toc:
-                hide_from_toc_set.add(sequence.location)
-            if sequence.visible_to_staff_only:
-                visible_to_staff_only_set.add(sequence.location)
 
         section_data = CourseSectionData(
             usage_key=section.location,
             title=section.display_name,
-            sequences=sequences_data
+            sequences=sequences_data,
+            visibility=VisibilityData(
+                hide_from_toc=section.hide_from_toc,
+                visible_to_staff_only=section.visible_to_staff_only
+            ),
         )
-        return section_data, hide_from_toc_set, visible_to_staff_only_set
+        return section_data
 
 
     # Do the expensive modulestore access before starting a transaction...
     store = modulestore()
     sections = []
-    hide_from_toc_set = set()
-    visible_to_staff_only_set = set()
     with store.branch_setting(ModuleStoreEnum.Branch.published_only, course_key):
         course = store.get_course(course_key, depth=2)
         sections_data = []
         for section in course.get_children():
-            section_data, sec_hide_from_toc, sec_visible_to_staff_only = _make_section_data(section)
+            section_data = _make_section_data(section)
             sections_data.append(section_data)
-            hide_from_toc_set.update(sec_hide_from_toc)
-            visible_to_staff_only_set.update(sec_visible_to_staff_only)
 
         sequences = OrderedDict()
         for section_data in sections_data:
@@ -92,10 +84,6 @@ def update_from_modulestore(course_key):
             published_version=str(course.course_version),  # .course_version is a BSON obj
             sections=sections_data,
             sequences=sequences,
-            visibility=CourseItemVisibilityData(
-                hide_from_toc=frozenset(hide_from_toc_set),
-                visible_to_staff_only=frozenset(visible_to_staff_only_set),
-            )
         )
 
     replace_course_outline(course_outline_data)

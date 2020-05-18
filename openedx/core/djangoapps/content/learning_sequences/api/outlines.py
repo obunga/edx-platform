@@ -10,13 +10,16 @@ from edx_django_utils.cache import TieredCache, get_cache_key
 from opaque_keys.edx.keys import CourseKey, UsageKey
 
 from .data import (
-    CourseItemVisibilityData, CourseOutlineData, CourseSectionData,
-    LearningSequenceData, UserCourseOutlineData, UserCourseOutlineDetailsData
+    CourseOutlineData, CourseSectionData,
+    LearningSequenceData, UserCourseOutlineData, UserCourseOutlineDetailsData,
+    VisibilityData,
 )
 from ..models import (
     CourseSection, CourseSectionSequence, LearningContext, LearningSequence
 )
+from .permissions import can_see_all_content
 from .processors.schedule import ScheduleOutlineProcessor
+from .processors.visibility import VisibilityOutlineProcessor
 
 User = get_user_model()
 log = logging.getLogger(__name__)
@@ -46,7 +49,9 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
     if outline_cache_result.is_found:
         return outline_cache_result.value
 
-    # Fetch model
+    # Fetch model data, and remember that empty Sections should still be
+    # represented (so query CourseSection explicitly instead of relying only on
+    # select_related from CourseSectionSequence).
     section_models = CourseSection.objects \
                          .filter(learning_context=learning_context) \
                          .order_by('order')
@@ -55,25 +60,22 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
                                   .order_by('order') \
                                   .select_related('sequence')
 
-    # Build mapping of section.id keys to sequence lists. We pull the sections
-    # separately to accurately represent empty sections/chapters.
+    # Build mapping of section.id keys to sequence lists.
     sec_ids_to_sequence_list = defaultdict(list)
     seq_keys_to_sequence = {}
-    hide_from_toc_set = set()
-    visible_to_staff_only_set = set()
 
     for sec_seq_model in section_sequence_models:
         sequence_model = sec_seq_model.sequence
         sequence_data = LearningSequenceData(
             usage_key=sequence_model.usage_key,
             title=sequence_model.title,
+            visibility=VisibilityData(
+                hide_from_toc=sec_seq_model.hide_from_toc,
+                visible_to_staff_only=sec_seq_model.visible_to_staff_only,
+            )
         )
         seq_keys_to_sequence[sequence_data.usage_key] = sequence_data
         sec_ids_to_sequence_list[sec_seq_model.section_id].append(sequence_data)
-        if sec_seq_model.hide_from_toc:
-            hide_from_toc_set.add(sequence_data.usage_key)
-        if sec_seq_model.visible_to_staff_only:
-            visible_to_staff_only_set.add(sequence_data.usage_key)
 
     sections_data = []
     for section_model in section_models:
@@ -81,13 +83,13 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
             CourseSectionData(
                 usage_key=section_model.usage_key,
                 title=section_model.title,
-                sequences=sec_ids_to_sequence_list[section_model.id]
+                sequences=sec_ids_to_sequence_list[section_model.id],
+                visibility=VisibilityData(
+                    hide_from_toc=section_model.hide_from_toc,
+                    visible_to_staff_only=section_model.visible_to_staff_only,
+                )
             )
         )
-        if section_model.hide_from_toc:
-            hide_from_toc_set.add(section_model.usage_key)
-        if section_model.visible_to_staff_only:
-            visible_to_staff_only_set.add(section_model.usage_key)
 
     outline_data = CourseOutlineData(
         course_key=learning_context.context_key,
@@ -96,10 +98,6 @@ def get_course_outline(course_key: CourseKey) -> CourseOutlineData:
         published_version=learning_context.published_version,
         sections=sections_data,
         sequences=seq_keys_to_sequence,
-        visibility=CourseItemVisibilityData(
-            hide_from_toc=frozenset(hide_from_toc_set),
-            visible_to_staff_only=frozenset(visible_to_staff_only_set),
-        )
     )
     TieredCache.set_all_tiers(cache_key, outline_data, 300)
 
@@ -161,7 +159,7 @@ def _get_user_course_outline_and_processors(course_key: CourseKey,
                                             user: User,
                                             at_time: datetime): # how do you do tuple responses of ordereddicts again?
     full_course_outline = get_course_outline(course_key)
-    has_staff_access = False
+    user_can_see_all_content = can_see_all_content(user, course_key)
 
     # These are processors that alter which sequences are visible to students.
     # For instance, certain sequences that are intentionally hidden or not yet
@@ -171,6 +169,7 @@ def _get_user_course_outline_and_processors(course_key: CourseKey,
 #        ('milestones', MilestonesOutlineProcessor),
 #        ('user_partitions', UserPartitionsOutlineProcessor),
         ('schedule', ScheduleOutlineProcessor),
+        ('visibility', VisibilityOutlineProcessor),
     ]
 
     # Run each OutlineProcessor in order to figure out what items we have to
@@ -185,10 +184,29 @@ def _get_user_course_outline_and_processors(course_key: CourseKey,
         processor = processor_cls(course_key, user, at_time)
         processors[name] = processor
         processor.load_data()
-        if not has_staff_access:
-            usage_keys_to_remove |= processor.usage_keys_to_remove(full_course_outline)
-            inaccessible_sequences |= processor.inaccessible_sequences(full_course_outline)
+        if not user_can_see_all_content:
+            processor_usage_keys_removed = processor.usage_keys_to_remove(full_course_outline)
+            processor_inaccessible_sequences = processor.inaccessible_sequences(full_course_outline)
+            log.info(
+                "Processor '%s' (%s) removed %d items for user %s: %s",
+                name,
+                processor_cls.__name__,
+                len(processor_usage_keys_removed),
+                user.username,
+                sorted(str(usage_key) for usage_key in processor_usage_keys_removed),
+            )
+            log.info(
+                "Processor '%s' (%s) made %d items inaccessible for user %s: %s",
+                name,
+                processor_cls.__name__,
+                len(processor_inaccessible_sequences),
+                user.username,
+                sorted(str(usage_key) for usage_key in processor_inaccessible_sequences),
+            )
+            usage_keys_to_remove |= processor_usage_keys_removed
+            inaccessible_sequences |= processor_inaccessible_sequences
 
+    # Question: Does it make sense to remove a Section if it has no Sequences in it?
     trimmed_course_outline = full_course_outline.remove(usage_keys_to_remove)
     accessible_sequences = set(trimmed_course_outline.sequences) - inaccessible_sequences
 
@@ -252,17 +270,14 @@ def _update_learning_context(course_outline: CourseOutlineData):
 def _update_sections(course_outline: CourseOutlineData, learning_context: LearningContext):
     # Add/update relevant sections...
     for order, section_data in enumerate(course_outline.sections):
-        hide_from_toc = section_data.usage_key in course_outline.visibility.hide_from_toc
-        visible_to_staff_only = section_data.usage_key in course_outline.visibility.visible_to_staff_only
-
         CourseSection.objects.update_or_create(
             learning_context=learning_context,
             usage_key=section_data.usage_key,
             defaults={
                 'title': section_data.title,
                 'order': order,
-                'hide_from_toc': hide_from_toc,
-                'visible_to_staff_only': visible_to_staff_only,
+                'hide_from_toc': section_data.visibility.hide_from_toc,
+                'visible_to_staff_only': section_data.visibility.visible_to_staff_only,
             }
         )
     # Delete sections that we don't want any more
@@ -303,15 +318,13 @@ def _update_course_section_sequences(course_outline: CourseOutlineData, learning
 
     for order, section_data in enumerate(course_outline.sections):
         for sequence_data in section_data.sequences:
-            hide_from_toc = sequence_data.usage_key in course_outline.visibility.hide_from_toc
-            visible_to_staff_only = sequence_data.usage_key in course_outline.visibility.visible_to_staff_only
             CourseSectionSequence.objects.update_or_create(
                 learning_context=learning_context,
                 section=section_models[section_data.usage_key],
                 sequence=sequence_models[sequence_data.usage_key],
                 defaults={
                     'order': order,
-                    'hide_from_toc': hide_from_toc,
-                    'visible_to_staff_only': visible_to_staff_only,
+                    'hide_from_toc': sequence_data.visibility.hide_from_toc,
+                    'visible_to_staff_only': sequence_data.visibility.visible_to_staff_only,
                 },
             )

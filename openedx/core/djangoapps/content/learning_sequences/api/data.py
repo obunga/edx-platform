@@ -20,15 +20,19 @@ log = logging.getLogger(__name__)
 
 
 @attr.s(frozen=True)
+class VisibilityData:
+    hide_from_toc = attr.ib(type=bool)
+    visible_to_staff_only = attr.ib(type=bool)
+
+
+@attr.s(frozen=True)
 class LearningSequenceData:
     usage_key = attr.ib(type=UsageKey)
     title = attr.ib(type=str)
 
-
-@attr.s(frozen=True)
-class CourseItemVisibilityData:
-    hide_from_toc = attr.ib(type=Set[UsageKey])
-    visible_to_staff_only = attr.ib(type=Set[UsageKey])
+    # Note: It might be that we'll eventually want visibility to only appear as
+    # a course-specific subclass of LearningSequenceData.
+    visibility = attr.ib(type=VisibilityData)
 
 
 @attr.s(frozen=True)
@@ -36,6 +40,7 @@ class CourseSectionData:
     usage_key = attr.ib(type=UsageKey)
     title = attr.ib(type=str)
     sequences = attr.ib(type=List[LearningSequenceData])
+    visibility = attr.ib(type=VisibilityData)
 
 
 class ObjectDoesNotExist(Exception):
@@ -85,9 +90,6 @@ class CourseOutlineData:
     # not be in sections, e.g. if the Sequence's hide_from_toc=True
     sequences = attr.ib(type=Dict[UsageKey, LearningSequenceData])
 
-    #
-    visibility = attr.ib(type=CourseItemVisibilityData)
-
     # outline_updated_at
     def remove(self, usage_keys):
         """
@@ -97,6 +99,23 @@ class CourseOutlineData:
         Section will remove all Sequences in that Section.
         """
         keys_to_remove = set(usage_keys)
+
+        return attr.evolve(
+            self,
+            sections=[
+                attr.evolve(
+                    section,
+                    sequences=[seq for seq in section.sequences if seq.usage_key not in keys_to_remove]
+                )
+                for section in self.sections
+                if section.usage_key not in keys_to_remove
+            ],
+            sequences={
+                usage_key: sequence_data
+                for usage_key, sequence_data in self.sequences.items()
+                if usage_key not in keys_to_remove
+            },
+        )
 
         # Placeholder: not really working yet
         return self

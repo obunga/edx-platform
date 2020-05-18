@@ -17,7 +17,11 @@ Usage
 
 * You may make foreign keys to learning_sequence models from your own app.
 * Otherwise, you should only ever import from the top level
-openedx.djangoapps.content.learning_sequences.api package. Do not import from
-anywhere else in the package, including sub-modules of api.
+``openedx.djangoapps.content.learning_sequences.api`` package. Do not import
+from anywhere else in the package, including sub-modules of ``api``.
 * If you are doing development work, please see the docs directory for
 architectural decisions related to this app.
+
+Overview
+========
+

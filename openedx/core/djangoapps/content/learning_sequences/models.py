@@ -62,21 +62,18 @@ class LearningContext(TimeStampedModel):
 
 class LearningSequence(TimeStampedModel):
     """
-    In a sort of abstract way, we can think of this as a join between the pure
-    piece of content represented by "usage_key", and how it's used in this
-    particular context. (Folks who are aware of the origin of "usage_key" may
-    find this bitterly ironic.)
-
     The reason why this model doesn't have a direct foreign key to CourseSection
     is because we eventually want to have LearningSequences that exist outside
-    of courses.
+    of courses. Attributes that apply directly to all LearningSequences
+    (usage_key, title, learning_context, etc.) will apply here, but anything
+    that is specific to how a LearningContext is rendered for a course (e.g.
+    permissions, staff visibility, is_entrance_exam) wil live in
+    CourseSectionSequence.
     """
     id = models.BigAutoField(primary_key=True)
     learning_context = models.ForeignKey(
         LearningContext, on_delete=models.CASCADE, related_name='sequences'
     )
-    # Do we really want "usage_key" terminology? Too abstract/awkward to use
-    # something more generic?
     usage_key = UsageKeyField(max_length=255)
     title = models.CharField(max_length=255)
 
@@ -89,8 +86,11 @@ class LearningSequence(TimeStampedModel):
 
 class CourseContentVisibilityMixin(models.Model):
     """
-    This stores all information that affects outline level visibility for a
+    This stores XBlock information that affects outline level visibility for a
     single LearningSequence or Section in a course.
+
+    We keep the XBlock field names here, even if they're somewhat misleading.
+    Please read the comments carefully for each field.
     """
     # This is an obscure, OLX-only flag (there is no UI for it in Studio) that
     # lets you define a Sequence that is reachable by direct URL but not shown
@@ -129,6 +129,14 @@ class CourseSectionSequence(CourseContentVisibilityMixin, TimeStampedModel):
     recreated with every course publish. Do NOT make a ForeignKey against this
     table before implementing smarter replacement logic when publishing happens,
     or you'll see deletes all the time.
+
+    CourseContentVisibilityMixin is applied here (and not in LearningSequence)
+    because CourseContentVisibilityMixin describes attributes that are part of
+    how a LearningSequence is used within a course, and may not apply to other
+    kinds of LearningSequences.
+
+    TODO: Shouldn't be deleting all the time, esp. since we have so much random
+    course visibility data.
     """
     id = models.BigAutoField(primary_key=True)
     learning_context = models.ForeignKey(
