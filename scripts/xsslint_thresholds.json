@@ -27,7 +27,7 @@
         "python-requires-html-or-text": 0,
         "python-wrap-html": 68,
         "underscore-not-escaped": 437,
-        "django-trans-missing-escape": 18,
+        "django-trans-missing-escape": 14,
         "django-trans-invalid-escape-filter": 0,
         "django-trans-escape-variable-mismatch": 0,
         "django-blocktrans-missing-escape-filter": 12,

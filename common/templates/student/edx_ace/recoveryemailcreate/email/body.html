@@ -16,7 +16,9 @@
                 <br />
             </p>
 
-            {% trans "Confirm Email" as course_cta_text %}
+            {% filter force_escape %}
+                {% blocktrans asvar course_cta_text %}Confirm Email{% endblocktrans %}
+            {% endfilter %}
             {% include "ace_common/edx_ace/common/return_to_course_cta.html" with course_cta_text=course_cta_text course_cta_url=confirm_link %}
 
         </td>
