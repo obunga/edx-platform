@@ -472,12 +472,9 @@ class CoursewareIndex(View):
 
         reset_deadlines_redirect_url_base = COURSE_HOME_VIEW_NAME if reset_deadlines_url else None
 
-        discussion_url = "/courses/{}/discussion/forum/".format(self.course.id)
-
         courseware_context = {
             'csrf': csrf(self.request)['csrf_token'],
             'course': self.course,
-            'discussion_url': discussion_url,
             'course_url': course_url,
             'chapter': self.chapter,
             'section': self.section,
